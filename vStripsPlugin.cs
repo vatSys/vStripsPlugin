@@ -67,9 +67,8 @@ namespace vStripsPlugin
         private void MMI_SelectedTrackChanged(object sender, EventArgs e)
         {
             if (MMI.SelectedTrack != null)
-            {
-                var callsign = (MMI.SelectedTrack.GetFDR().Callsign);
-                vStripsConnector.SelectStrip(callsign);
+            {                
+                vStripsConnector.SelectStrip(MMI.SelectedTrack.GetFDR().Callsign);
             }
         }
 

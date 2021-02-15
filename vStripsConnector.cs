@@ -110,7 +110,10 @@ namespace vStripsPlugin
 
         public static void SelectStrip(String callsign)
         {
-            Instance.SendPacket(">"+callsign);
+            if (Instance?.connected == true)
+            {
+                Instance.SendPacket(">" + callsign);
+            }
         }
 
 
@@ -388,7 +391,7 @@ namespace vStripsPlugin
                     if (msg_fields.Length > 3 && fdr != null)
                     {
                         string[] rte_fields;
-                        string rwy;
+                        string rwy=null;                                                                // new arrival runway
                         
                         if (fdr.DepAirport == msg_fields[1] && fdr.DesAirport == msg_fields[2])
                         {
@@ -397,9 +400,9 @@ namespace vStripsPlugin
                             rte_fields = rte.Split(' ');                                                // split on space                            
                             var last_rte_field_index =rte_fields.Length - 1;                            // get total number of fields in cleaned route - last is Dest ICAO
 
-                            if (rte_fields[0].Contains('/') && fdr.CoupledTrack?.OnGround == false)     // If the first field has a slash, it's a Dep runway assignment
-                            {                                          
-                                string[] start_fields = rte_fields[0].Split('/');                       // if contains / it has Runway as well - if airborne strip                                    {                                
+                            if (rte_fields[0].Contains('/') && fdr.CoupledTrack?.OnGround == false)     // If the first field has a slash,  it's a Dep runway assignment.
+                            {                                                                           // but if we're airborne it needs to shift to Arr runway
+                                string[] start_fields = rte_fields[0].Split('/');                                                       
                                 rte_fields[0] = start_fields[0];                                        // Strip runway from start                                                                                                                                                     
                                 rwy = start_fields[1];
 
@@ -408,7 +411,7 @@ namespace vStripsPlugin
                                     rte_fields[last_rte_field_index - 1] = endarr[0] + "/" + rwy;        // append rwy from start of string to 2nd to last element
                                     
                                 } else {
-                                    rte_fields[last_rte_field_index - 1] += "/" + rwy;                   // else just append rwy from start of string to 2nd to last element
+                                    rte_fields[last_rte_field_index - 1] += "/" + rwy;                   // else append rwy from start of string to 2nd to last element
                                 }
                             }
 
@@ -421,8 +424,9 @@ namespace vStripsPlugin
                                     rte += " ";
                             }
 
-                            FDP2.ModifyRoute(fdr, rte);
-                            //FDP2.SetArrivalRunway(fdr, Airspace2.GetRunway(fdr.DesAirport, rwy));     // if we want to update the RWY and SID, but we don't.
+                            FDP2.ModifyRoute(fdr, rte);                                                 // update route
+                            if(rwy!=null)                                                               // if there is an arrival runway in the received data - 
+                            FDP2.SetArrivalRunway(fdr, Airspace2.GetRunway(fdr.DesAirport, rwy));       // Explictily set arrival runway (because Jake said I should)
                             //FDP2.ModifyRoute(fdr, msg_fields[3]);                                     // Old
 
                         } else
@@ -446,7 +450,7 @@ namespace vStripsPlugin
                     if(fdr != null)
                     {
                         var currentSelection = MMI.SelectedTrack;                                       // Deselect old
-                        if(MMI.SelectedTrack != null)                                                   // JMG added to ensure reflected callsign selection doesn't deselect                           
+                        if(MMI.SelectedTrack != null)                                                   
                             MMI.SelectOrDeselectTrack(currentSelection);
 
                         var trk = MMI.FindTrack(fdr);
