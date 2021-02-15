@@ -190,7 +190,7 @@ namespace vStripsPlugin
 
         private void SendRemarks(FDP2.FDR fdr)
         {
-            string rmks = $"P{fdr.Remarks}";
+            string rmks = $"P{fdr.Callsign}:{fdr.Remarks}";
             SendPacket(rmks);
         }
 
@@ -337,7 +337,7 @@ namespace vStripsPlugin
             if (connected)
             { 
                 SendPacket($"R00:00");
-                //SendPacket($"R{Runways}"); //Old                                                 
+                //SendPacket($"R{Runways}"); //Old                                                              
             }
         }
 
