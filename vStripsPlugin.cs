@@ -28,15 +28,19 @@ namespace vStripsPlugin
         {
             vStripsConnector.Start();
 
-            setupWindowMenu = new CustomToolStripMenuItem(CustomToolStripMenuItemWindowType.Main, CustomToolStripMenuItemCategory.Settings, new ToolStripMenuItem("vStrips Runway"));
+            setupWindowMenu = new CustomToolStripMenuItem(CustomToolStripMenuItemWindowType.Main, CustomToolStripMenuItemCategory.Settings, new ToolStripMenuItem("vStrips INTAS"));
             setupWindowMenu.Item.Click += SetupWindowMenu_Click;
             MMI.AddCustomMenuItem(setupWindowMenu);
+            
+            MMI.SelectedTrackChanged += MMI_SelectedTrackChanged;                                           // Subscribe to Selected Track change event JMG
+
         }
 
         private void SetupWindowMenu_Click(object sender, EventArgs e)
         {
             DoShowSetupWindow();
         }
+        
 
         public void OnFDRUpdate(FDP2.FDR updated)
         {
@@ -48,7 +52,7 @@ namespace vStripsPlugin
             else
             {
                 updated.PropertyChanged -= FDR_PropertyChanged;
-                updated.PropertyChanged += FDR_PropertyChanged;
+                updated.PropertyChanged += FDR_PropertyChanged;                
             }
         }
 
@@ -56,6 +60,19 @@ namespace vStripsPlugin
         {
             vStripsConnector.UpdateFDR((FDP2.FDR)sender);
         }
+
+        /*
+         * When a track is selected in vatSys, send the selected track to vStrips
+         */
+        private void MMI_SelectedTrackChanged(object sender, EventArgs e)
+        {
+            if (MMI.SelectedTrack != null)
+            {
+                var callsign = (MMI.SelectedTrack.GetFDR().Callsign);
+                vStripsConnector.SelectStrip(callsign);
+            }
+        }
+
 
         public void OnRadarTrackUpdate(RDP.RadarTrack updated)
         {

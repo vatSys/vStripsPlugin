@@ -108,6 +108,12 @@ namespace vStripsPlugin
             }
         }
 
+        public static void SelectStrip(String callsign)
+        {
+            Instance.SendPacket(">"+callsign);
+        }
+
+
         private void Connect()
         {
             vStripsSocket.Connect(vStripsHost);
@@ -151,6 +157,9 @@ namespace vStripsPlugin
             string trans = $"T{RDP.TRANSITION_ALTITUDE}";
             SendPacket(trans);
         }
+        
+
+
 
         private void SendATCOnline(NetworkATC atc)
         {
@@ -172,6 +181,7 @@ namespace vStripsPlugin
             string rmks = $"P{fdr.Remarks}";
             SendPacket(rmks);
         }
+
 
         private void SendAircraftMetadata(FDP2.FDR fdr)
         {
@@ -258,7 +268,7 @@ namespace vStripsPlugin
                 gone,
                 togo,
                 fdr.AircraftType + "/" + fdr.AircraftWake,
-                fdr.SIDSTARString, 
+                (fdr.DepAirport == Airport?.ICAOName ? fdr.SIDSTARString:""),                       //  modified JMG - Inhibit STAR population for airborne
                 fdr.RunwayString, 
                 fdr.FlightRules, 
                 fdr.RFL, 
@@ -310,10 +320,13 @@ namespace vStripsPlugin
             }
         }
 
-        private void SendRunways()
+        private void SendRunways()                                                                  // modified JMG to force runways to none and add send QNH
         {
-            if(connected)
-                SendPacket($"R{Runways}");
+            if (connected)
+            { 
+                SendPacket($"R00:00");
+                //SendPacket($"R{Runways}"); //Old                                                 
+            }
         }
 
         private void ProcessPacket(string packet)
@@ -342,7 +355,7 @@ namespace vStripsPlugin
                     {
                         Airport = Airspace2.GetAirport(msg);
                         setRunways = false;
-                        vStripsPlugin.ShowSetupWindow();
+                        //vStripsPlugin.ShowSetupWindow();                                             // Commented out to stop popup JMG
                     }
                     else
                         SendRunways();
@@ -363,14 +376,58 @@ namespace vStripsPlugin
                         }
                     }
                     break;
+                
+                /*
+                 * JMG 
+                 * vStrips doesn't send Arrival Runway, so we use Dep runway in vStrips for Arrival runway allocation. 
+                 * We need to keep an eye out when Route changes received that have a Dep runway and reassign to Arr runway.
+                 * 
+                 */
                 case 'R':
+
                     if (msg_fields.Length > 3 && fdr != null)
                     {
+                        string[] rte_fields;
+                        string rwy;
+                        
                         if (fdr.DepAirport == msg_fields[1] && fdr.DesAirport == msg_fields[2])
-                            FDP2.ModifyRoute(fdr, msg_fields[3]);
-                        else
+                        {
+                            
+                            string rte = msg_fields[3];
+                            rte_fields = rte.Split(' ');                                                // split on space                            
+                            var last_rte_field_index =rte_fields.Length - 1;                            // get total number of fields in cleaned route - last is Dest ICAO
+
+                            if (rte_fields[0].Contains('/') && fdr.CoupledTrack?.OnGround == false)     // If the first field has a slash, it's a Dep runway assignment
+                            {                                          
+                                string[] start_fields = rte_fields[0].Split('/');                       // if contains / it has Runway as well - if airborne strip                                    {                                
+                                rte_fields[0] = start_fields[0];                                        // Strip runway from start                                                                                                                                                     
+                                rwy = start_fields[1];
+
+                                if (rte_fields[last_rte_field_index - 1].Contains("/")){                 // if the second to last field has a runway in it, replace
+                                    string[] endarr = rte_fields[last_rte_field_index - 1].Split('/');   // Split 2nd to last on / (if it has runway already)
+                                    rte_fields[last_rte_field_index - 1] = endarr[0] + "/" + rwy;        // append rwy from start of string to 2nd to last element
+                                    
+                                } else {
+                                    rte_fields[last_rte_field_index - 1] += "/" + rwy;                   // else just append rwy from start of string to 2nd to last element
+                                }
+                            }
+
+                           
+                            rte = "";                                                                    // empty route and rebuild it 
+                            for(int i = 0; i < last_rte_field_index; i++)                                   
+                            {
+                                rte += rte_fields[i];
+                                if (i < last_rte_field_index)
+                                    rte += " ";
+                            }
+
+                            FDP2.ModifyRoute(fdr, rte);
+                            //FDP2.SetArrivalRunway(fdr, Airspace2.GetRunway(fdr.DesAirport, rwy));     // if we want to update the RWY and SID, but we don't.
+                            //FDP2.ModifyRoute(fdr, msg_fields[3]);                                     // Old
+
+                        } else
                             FDP2.ModifyFDR(fdr, fdr.Callsign, fdr.FlightRules, msg_fields[1], msg_fields[2], msg_fields[3], fdr.Remarks, fdr.AircraftCount.ToString(), fdr.AircraftType, fdr.AircraftWake, fdr.AircraftEquip, fdr.AircraftSurvEquip, fdr.TAS.ToString(), fdr.RFL.ToString(), fdr.ETD.ToString("HHmm"), fdr.EET.ToString("HHmm"));
-                    }
+                        }
                         break;
                 case 'H':
                     if (msg_fields.Length > 1 && fdr != null)
@@ -385,11 +442,18 @@ namespace vStripsPlugin
                     }
                     break;
                 case '>':
-                    if(fdr != null && MMI.SelectedTrack == null)
+                    // Edited JMG to ensure when strip is selected in vStrips, track is selected in vatSys
+                    if(fdr != null)
                     {
+                        var currentSelection = MMI.SelectedTrack;                                       // Deselect old
+                        if(MMI.SelectedTrack != null)                                                   // JMG added to ensure reflected callsign selection doesn't deselect                           
+                            MMI.SelectOrDeselectTrack(currentSelection);
+
                         var trk = MMI.FindTrack(fdr);
                         if (trk != null)
+                        {                                                        
                             MMI.SelectOrDeselectTrack(trk);
+                        }
                     }                    
                     break;
             }
