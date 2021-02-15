@@ -396,47 +396,40 @@ namespace vStripsPlugin
                  * 
                  */
                 case 'R':
-
                     if (msg_fields.Length > 3 && fdr != null)
-                    {
-                        string[] rte_fields;
-                        string rwy=null;                                                                // new arrival runway
-                        
+                    {                                                                        
                         if (fdr.DepAirport == msg_fields[1] && fdr.DesAirport == msg_fields[2])
                         {
-                            
+
                             string rte = msg_fields[3];
-                            rte_fields = rte.Split(' ');                                                // split on space                            
-                            var last_rte_field_index =rte_fields.Length - 1;                            // get total number of fields in cleaned route - last is Dest ICAO
+                            string[] rte_fields = rte.Split(' ');                                           // parse route on space                            
+                            
 
-                            if (rte_fields[0].Contains('/') && fdr.CoupledTrack?.OnGround == false)     // If the first field has a slash,  it's a Dep runway assignment.
-                            {                                                                           // but if we're airborne it needs to shift to Arr runway
-                                string[] start_fields = rte_fields[0].Split('/');                                                       
-                                rte_fields[0] = start_fields[0];                                        // Strip runway from start                                                                                                                                                     
-                                rwy = start_fields[1];
-
-                                if (rte_fields[last_rte_field_index - 1].Contains("/")){                 // if the second to last field has a runway in it, replace
-                                    string[] endarr = rte_fields[last_rte_field_index - 1].Split('/');   // Split 2nd to last on / (if it has runway already)
-                                    rte_fields[last_rte_field_index - 1] = endarr[0] + "/" + rwy;        // append rwy from start of string to 2nd to last element
-                                    
-                                } else {
-                                    rte_fields[last_rte_field_index - 1] += "/" + rwy;                   // else append rwy from start of string to 2nd to last element
-                                }
-                            }
-
-                           
-                            rte = "";                                                                    // empty route and rebuild it 
-                            for(int i = 0; i < last_rte_field_index; i++)                                   
+                            if (rte_fields[0].Contains('/') )                                               // If the first field has a slash,  it's a Dep runway assignment.
                             {
-                                rte += rte_fields[i];
-                                if (i < last_rte_field_index)
-                                    rte += " ";
-                            }
+                                string[] start_fields = rte_fields[0].Split('/');                                                           
+                                String NewRwy = start_fields[1];                                            // get the runway
 
-                            FDP2.ModifyRoute(fdr, rte);                                                 // update route
-                            if(rwy!=null)                                                               // if there is an arrival runway in the received data - 
-                            FDP2.SetArrivalRunway(fdr, Airspace2.GetRunway(fdr.DesAirport, rwy));       // Explictily set arrival runway (because Jake said I should)
-                            //FDP2.ModifyRoute(fdr, msg_fields[3]);                                     // Old
+                                if (fdr.CoupledTrack?.OnGround == false)                                    // if we're airborne apply the runway to Arrivals
+                                {
+                                    FDP2.SetArrivalRunway(fdr, Airspace2.GetRunway(fdr.DesAirport, NewRwy));
+                                }
+                                else                                                                        // Apply the Route change, or Dep runway change
+                                {
+                                    string temprwy = "";
+                                    if (fdr.DepartureRunway != null)
+                                        temprwy = fdr.DepartureRunway.ToString();
+
+                                    if (temprwy != NewRwy)                                                  // if the Dep runway has changed
+                                    {
+                                        FDP2.SetDepartureRunway(fdr, Airspace2.GetRunway(fdr.DepAirport, NewRwy));
+                                    }
+                                    else                                                                    // Not a runway change, so update the route
+                                    {
+                                        FDP2.ModifyRoute(fdr, rte);
+                                    }
+                                }
+                            }                          
 
                         } else
                             FDP2.ModifyFDR(fdr, fdr.Callsign, fdr.FlightRules, msg_fields[1], msg_fields[2], msg_fields[3], fdr.Remarks, fdr.AircraftCount.ToString(), fdr.AircraftType, fdr.AircraftWake, fdr.AircraftEquip, fdr.AircraftSurvEquip, fdr.TAS.ToString(), fdr.RFL.ToString(), fdr.ETD.ToString("HHmm"), fdr.EET.ToString("HHmm"));

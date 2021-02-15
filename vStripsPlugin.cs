@@ -42,7 +42,6 @@ namespace vStripsPlugin
         }
         
        
-
         public void OnFDRUpdate(FDP2.FDR updated)
         {
             if (FDP2.GetFDRIndex(updated.Callsign) == -1)//removed
