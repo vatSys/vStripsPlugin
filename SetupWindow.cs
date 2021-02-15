@@ -78,6 +78,11 @@ namespace vStripsPlugin
             this.Close();
         }
 
+        private void restartButton_Click(object sender, EventArgs e)
+        {
+            vStripsConnector.Restart();
+        }
+
         private void SetupWindow_FormClosing(object sender, FormClosingEventArgs e)
         {
             if (e.CloseReason == CloseReason.UserClosing && !closeDialog)

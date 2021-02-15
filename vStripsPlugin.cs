@@ -41,6 +41,7 @@ namespace vStripsPlugin
             DoShowSetupWindow();
         }
         
+       
 
         public void OnFDRUpdate(FDP2.FDR updated)
         {

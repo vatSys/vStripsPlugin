@@ -38,6 +38,7 @@ namespace vStripsPlugin
             this.airportLabel = new vatsys.TextLabel();
             this.textLabel2 = new vatsys.TextLabel();
             this.textLabel3 = new vatsys.TextLabel();
+            this.b_restartPlugin = new vatsys.GenericButton();
             this.insetPanel1.SuspendLayout();
             this.insetPanel2.SuspendLayout();
             this.SuspendLayout();
@@ -46,7 +47,7 @@ namespace vStripsPlugin
             // 
             this.storeButton.Enabled = false;
             this.storeButton.Font = new System.Drawing.Font("Terminus (TTF)", 18F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel);
-            this.storeButton.Location = new System.Drawing.Point(37, 219);
+            this.storeButton.Location = new System.Drawing.Point(87, 250);
             this.storeButton.Name = "storeButton";
             this.storeButton.Size = new System.Drawing.Size(75, 28);
             this.storeButton.SubFont = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
@@ -59,7 +60,7 @@ namespace vStripsPlugin
             // cancelButton
             // 
             this.cancelButton.Font = new System.Drawing.Font("Terminus (TTF)", 18F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel);
-            this.cancelButton.Location = new System.Drawing.Point(121, 219);
+            this.cancelButton.Location = new System.Drawing.Point(168, 250);
             this.cancelButton.Name = "cancelButton";
             this.cancelButton.Size = new System.Drawing.Size(75, 28);
             this.cancelButton.SubFont = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
@@ -106,7 +107,7 @@ namespace vStripsPlugin
             // insetPanel2
             // 
             this.insetPanel2.Controls.Add(this.departureView);
-            this.insetPanel2.Location = new System.Drawing.Point(118, 53);
+            this.insetPanel2.Location = new System.Drawing.Point(130, 53);
             this.insetPanel2.Name = "insetPanel2";
             this.insetPanel2.Size = new System.Drawing.Size(100, 150);
             this.insetPanel2.TabIndex = 5;
@@ -147,18 +148,32 @@ namespace vStripsPlugin
             this.textLabel3.ForeColor = System.Drawing.SystemColors.ControlDark;
             this.textLabel3.HasBorder = false;
             this.textLabel3.InteractiveText = false;
-            this.textLabel3.Location = new System.Drawing.Point(118, 36);
+            this.textLabel3.Location = new System.Drawing.Point(130, 36);
             this.textLabel3.Name = "textLabel3";
             this.textLabel3.Size = new System.Drawing.Size(64, 17);
             this.textLabel3.TabIndex = 8;
             this.textLabel3.Text = "Dep RWY";
             this.textLabel3.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             // 
+            // b_restartPlugin
+            // 
+            this.b_restartPlugin.Font = new System.Drawing.Font("Terminus (TTF)", 18F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel);
+            this.b_restartPlugin.Location = new System.Drawing.Point(6, 250);
+            this.b_restartPlugin.Name = "b_restartPlugin";
+            this.b_restartPlugin.Size = new System.Drawing.Size(75, 28);
+            this.b_restartPlugin.SubFont = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.b_restartPlugin.SubText = "";
+            this.b_restartPlugin.TabIndex = 9;
+            this.b_restartPlugin.Text = "Restart";
+            this.b_restartPlugin.UseVisualStyleBackColor = true;
+            this.b_restartPlugin.Click += new System.EventHandler(this.restartButton_Click);
+            // 
             // SetupWindow
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 17F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(230, 260);
+            this.ClientSize = new System.Drawing.Size(252, 291);
+            this.Controls.Add(this.b_restartPlugin);
             this.Controls.Add(this.textLabel3);
             this.Controls.Add(this.textLabel2);
             this.Controls.Add(this.airportLabel);
@@ -195,5 +210,6 @@ namespace vStripsPlugin
         private vatsys.TextLabel airportLabel;
         private vatsys.TextLabel textLabel2;
         private vatsys.TextLabel textLabel3;
+        private vatsys.GenericButton b_restartPlugin;
     }
 }

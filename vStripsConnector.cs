@@ -81,10 +81,19 @@ namespace vStripsPlugin
             SendControllerInfo();
         }
 
+
+        public static void Restart()
+        {
+            Stop();
+            Instance = null;
+            Instance = new vStripsConnector();
+            Instance.Connect();
+        }
+
         public static void Start()
         {
             Instance = new vStripsConnector();
-            Instance.Connect();
+            Instance.Connect();            
         }
 
         public static void Stop()

@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<Options xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <FormOpacity>1</FormOpacity>
+  <ShowingAirborneTime>false</ShowingAirborneTime>
+  <StripOrder>BottomUp</StripOrder>
+  <FontScale>1.05</FontScale>
+  <SelectFlightInEsFromVs>true</SelectFlightInEsFromVs>
+  <SelectStripInVsFromEs>true</SelectStripInVsFromEs>
+  <ShowCommType>true</ShowCommType>
+  <UseOnScreenKeyboard>false</UseOnScreenKeyboard>
+  <Airfield>YSSY</Airfield>
+  <BayColour>-8355712</BayColour>
+  <BayTitleColour>-4144960</BayTitleColour>
+  <QsyColour>-16744448</QsyColour>
+  <AtcRemarkColour>-4934476</AtcRemarkColour>
+  <BadSquawkColour>-16776961</BadSquawkColour>
+  <OldQnhColour>-16776961</OldQnhColour>
+</Options>
