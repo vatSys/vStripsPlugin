@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -24,7 +25,11 @@ namespace vStripsPlugin
             departureView.BackColor = Colours.GetColour(Colours.Identities.WindowBackgound);
             departureView.ForeColor = Colours.GetColour(Colours.Identities.InteractiveText);
 
-            if(vStripsConnector.Airport != null)
+            // Retrieve Properties Information
+            //https://www.daveoncsharp.com/2009/07/using-the-settings-file-in-csharp/
+            t_vStripsHostIP.Text = Properties.Settings.Default.vStripsHost;
+
+            if (vStripsConnector.Airport != null)
             {
                 airportLabel.Enabled = true;
                 airportLabel.Text = vStripsConnector.Airport.ICAOName;
@@ -49,6 +54,45 @@ namespace vStripsPlugin
                     arrivalView.Enabled = true;
                     departureView.Enabled = true;
                 }
+            }
+        }
+
+        /**
+         * On key up, checks if Enter was pressed. If so, store and update the IP
+         */
+        private void HostIP_onKeyup(object sender, KeyPressEventArgs e)
+        {
+            if (e.KeyChar == Convert.ToChar(Keys.Return)) 
+            {
+                b_restartPlugin.Focus();
+                updateHostIP(t_vStripsHostIP.Text);                                
+            }
+        }
+
+        private void storeHostIPChange(object sender, EventArgs e)
+        {
+            updateHostIP(t_vStripsHostIP.Text);
+        }
+
+        /**
+         *  If the Host IP has changed, try to convert the string to an IP address
+         *  If successful, update the Preferences and update the vStripConnector HostIP
+         */
+
+        private void updateHostIP(string hostip)
+        {
+            IPAddress ip;
+            bool result = IPAddress.TryParse(hostip, out ip);
+            if (result == true)
+            {
+                Properties.Settings.Default.vStripsHost = hostip;                                   // update settings
+                vStripsConnector.HostIP = ip;                                                       // update hostIP
+                Properties.Settings.Default.Save();                                                 // save settings
+            }
+            else                                                                                    // IP invalid, restore old setting
+            {
+                // Add error notification?
+                t_vStripsHostIP.Text = Properties.Settings.Default.vStripsHost;                     // put old value back
             }
         }
 
@@ -121,6 +165,11 @@ namespace vStripsPlugin
             }
 
             storeButton.Enabled = false;
+        }
+
+        private void textLabel2_Click(object sender, EventArgs e)
+        {
+
         }
     }
 }

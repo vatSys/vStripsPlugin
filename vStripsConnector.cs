@@ -17,7 +17,7 @@ namespace vStripsPlugin
     {
         public const string DEFAULT_RUNWAYS = "00:00";
 
-        private IPEndPoint vStripsHost = new IPEndPoint(IPAddress.Loopback, VSTRIPS_PORT);
+        private IPEndPoint vStripsHost;
         private UdpClient vStripsSocket;
         private const int VSTRIPS_PORT = 60301;
         private const string MIN_VSTRIPS_PLUGIN_VERSION = "1.18";
@@ -31,7 +31,9 @@ namespace vStripsPlugin
         private static vStripsConnector Instance;
 
         public static event EventHandler<PacketReceivedEventArgs> PacketReceived;
-
+        
+        public static IPAddress HostIP = IPAddress.Loopback;
+        
         private static string runways = DEFAULT_RUNWAYS;
         public static string Runways
         {
@@ -43,6 +45,7 @@ namespace vStripsPlugin
 
         private vStripsConnector()
         {
+            vStripsHost = new IPEndPoint(HostIP, VSTRIPS_PORT);
             vStripsSocket = new UdpClient();
             cancellationToken = new CancellationTokenSource();
         }

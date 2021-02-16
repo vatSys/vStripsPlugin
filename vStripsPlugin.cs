@@ -26,6 +26,19 @@ namespace vStripsPlugin
 
         public vStripsPlugin()
         {
+            // Get IP address of vStrips host from config 
+            IPAddress ip;    
+            if(IPAddress.TryParse(Properties.Settings.Default.vStripsHost, out ip))
+            {
+                vStripsConnector.HostIP = ip;
+            }
+            else
+            {
+                vStripsConnector.HostIP = IPAddress.Loopback;
+                Properties.Settings.Default.vStripsHost=IPAddress.Loopback.ToString();
+            }
+            
+
             vStripsConnector.Start();
 
             setupWindowMenu = new CustomToolStripMenuItem(CustomToolStripMenuItemWindowType.Main, CustomToolStripMenuItemCategory.Settings, new ToolStripMenuItem("vStrips INTAS"));
