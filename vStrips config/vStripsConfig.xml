@@ -6375,7 +6375,7 @@ CROSS</ToCrossLabel>
               <RequiresStand>false</RequiresStand>
             </TriggerDefinition>
           </Triggers>
-          <DisplayStripType>PlannedDepartures_Cleared</DisplayStripType>
+          <DisplayStripType>INTAS_PlannedDepartures_Cleared</DisplayStripType>
         </SlotDefinition>
         <SlotDefinition>
           <Name>RDY</Name>
@@ -6413,7 +6413,7 @@ CROSS</ToCrossLabel>
               <RequiresStand>false</RequiresStand>
             </TriggerDefinition>
           </Triggers>
-          <DisplayStripType>Ready_Started</DisplayStripType>
+          <DisplayStripType>INTAS_PlannedDepartures_Cleared</DisplayStripType>
         </SlotDefinition>
         <SlotDefinition>
           <Name>STRT</Name>
@@ -7157,7 +7157,7 @@ CROSS</ToCrossLabel>
               <YSize>2</YSize>
               <XSize>1</XSize>
               <Slots>ARRS</Slots>
-              <DisplayStripType>INTAS_Inbound</DisplayStripType>
+              <DisplayStripType>SlotDefined</DisplayStripType>
               <Buttons>#:NEW</Buttons>
               <AutoOrdering>None</AutoOrdering>
               <SmallStripName>Small3</SmallStripName>
@@ -7476,7 +7476,7 @@ CROSS</ToCrossLabel>
               <RequiresStand>false</RequiresStand>
             </TriggerDefinition>
           </Triggers>
-          <DisplayStripType>PlannedDepartures_Cleared</DisplayStripType>
+          <DisplayStripType>INTAS_PlannedDepartures_Cleared</DisplayStripType>
         </SlotDefinition>
         <SlotDefinition>
           <Name>RDY</Name>
@@ -7514,7 +7514,7 @@ CROSS</ToCrossLabel>
               <RequiresStand>false</RequiresStand>
             </TriggerDefinition>
           </Triggers>
-          <DisplayStripType>Ready_Started</DisplayStripType>
+          <DisplayStripType>INTAS_PlannedDepartures_Cleared</DisplayStripType>
         </SlotDefinition>
         <SlotDefinition>
           <Name>STRT</Name>
@@ -8258,7 +8258,7 @@ CROSS</ToCrossLabel>
               <YSize>2</YSize>
               <XSize>1</XSize>
               <Slots>ARRS</Slots>
-              <DisplayStripType>INTAS_Inbound</DisplayStripType>
+              <DisplayStripType>SlotDefined</DisplayStripType>
               <Buttons>#:NEW</Buttons>
               <AutoOrdering>None</AutoOrdering>
               <SmallStripName>Small3</SmallStripName>
@@ -8577,7 +8577,7 @@ CROSS</ToCrossLabel>
               <RequiresStand>false</RequiresStand>
             </TriggerDefinition>
           </Triggers>
-          <DisplayStripType>PlannedDepartures_Cleared</DisplayStripType>
+          <DisplayStripType>INTAS_PlannedDepartures_Cleared</DisplayStripType>
         </SlotDefinition>
         <SlotDefinition>
           <Name>RDY</Name>
@@ -8615,7 +8615,7 @@ CROSS</ToCrossLabel>
               <RequiresStand>false</RequiresStand>
             </TriggerDefinition>
           </Triggers>
-          <DisplayStripType>Ready_Started</DisplayStripType>
+          <DisplayStripType>INTAS_PlannedDepartures_Cleared</DisplayStripType>
         </SlotDefinition>
         <SlotDefinition>
           <Name>STRT</Name>
@@ -9359,7 +9359,7 @@ CROSS</ToCrossLabel>
               <YSize>2</YSize>
               <XSize>1</XSize>
               <Slots>ARRS</Slots>
-              <DisplayStripType>INTAS_Inbound</DisplayStripType>
+              <DisplayStripType>SlotDefined</DisplayStripType>
               <Buttons>#:NEW</Buttons>
               <AutoOrdering>None</AutoOrdering>
               <SmallStripName>Small3</SmallStripName>

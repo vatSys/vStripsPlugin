@@ -16,7 +16,7 @@ namespace vStripsPlugin
     internal class vStripsConnector
     {
         public const string DEFAULT_RUNWAYS = "00:00";
-
+        
         private IPEndPoint vStripsHost;
         private UdpClient vStripsSocket;
         private const int VSTRIPS_PORT = 60301;
@@ -27,14 +27,16 @@ namespace vStripsPlugin
         private List<string> vStripsSentATCCallsigns = new List<string>();
         private bool connected = false;
         private bool setRunways = false;
+        
 
         private static vStripsConnector Instance;
-
+        
         public static event EventHandler<PacketReceivedEventArgs> PacketReceived;
         
         public static IPAddress HostIP = IPAddress.Loopback;
         
         private static string runways = DEFAULT_RUNWAYS;
+        private static string qnh="";
         public static string Runways
         {
             get { return runways; }
@@ -47,7 +49,8 @@ namespace vStripsPlugin
         {
             vStripsHost = new IPEndPoint(HostIP, VSTRIPS_PORT);
             vStripsSocket = new UdpClient();
-            cancellationToken = new CancellationTokenSource();
+            cancellationToken = new CancellationTokenSource();            
+
         }
 
         private void Network_OnlineATCChanged(object sender, Network.ATCUpdateEventArgs e)
@@ -79,6 +82,8 @@ namespace vStripsPlugin
                 SendATCOffline(atc);
         }
 
+        
+
         private void Network_PrimaryFrequencyChanged(object sender, EventArgs e)
         {
             SendControllerInfo();
@@ -105,6 +110,38 @@ namespace vStripsPlugin
             Instance?.vStripsAssignedHeadings.Clear();
         }
 
+        private void Connect()
+        {
+            vStripsSocket.Connect(vStripsHost);
+            Task.Run(() => ReceiveData());
+            Task.Run(() => PollForConnection());
+        }
+
+        private void PollForConnection()
+        {
+            while (!connected && !cancellationToken.IsCancellationRequested)
+            {
+                SendVersion();
+                Thread.Sleep(1000);
+            }
+        }
+
+        private void SendVersion()
+        {
+            SendPacket("h" + MIN_VSTRIPS_PLUGIN_VERSION);
+        }
+
+        private void OnConnected()
+        {
+            connected = true;
+            Network.PrimaryFrequencyChanged += Network_PrimaryFrequencyChanged;
+            Network.OnlineATCChanged += Network_OnlineATCChanged;
+            MET.Instance.ProductsChanged += MET_ProductChanged;
+            SyncATCLists();
+            SendQnh();
+        }
+
+
         public static void UpdateFDR(FDP2.FDR fdr)
         {
             if(Instance?.connected == true)
@@ -122,42 +159,58 @@ namespace vStripsPlugin
 
         public static void SelectStrip(String callsign)
         {
-            if (Instance?.connected == true)
+            if (Instance?.connected == true)            
+                Instance.SendPacket(">" + callsign);            
+        }
+
+        /*
+         * Called on MET change event
+         * If a VATSIM METAR received and it matches the ICAO of our Airfield, store in the qnh var
+         * Then if online, update online
+         * 
+         */
+        public void MET_ProductChanged(object sender, MET.ProductsChangedEventArgs e)
+        {
+            if (e.ProductRequest.Icao == Airport?.ICAOName)                
             {
-                Instance.SendPacket(">" + callsign);
+                try
+                {
+                    var products = MET.Instance.Products[e.ProductRequest];
+                    var prod = products.FirstOrDefault();
+                    switch (prod)
+                    {
+                        case MET.VATSIM_METAR vatmet:
+                            qnh = vatmet.QNH;
+                            if (Instance?.connected == true)
+                                SendQnh();
+                            break;
+                        default:
+                            break;
+                    }
+                } catch (Exception ex) {
+                    // When an Airfield is cleared from the AIS window 
+                    // var products = MET.Instance.Products[e.ProductRequest];
+                    // generates an Indec Not found exception
+                }
             }
         }
 
-
-        private void Connect()
+        /*
+         * Request a VATSIM METAR
+         * Called on reciept of Airfield code from vatSys
+         */
+        private void getMetar(string ICAO)
         {
-            vStripsSocket.Connect(vStripsHost);
-            Task.Run(() => ReceiveData());
-            Task.Run(() => PollForConnection());
-        }
-
-        private void PollForConnection()
-        {
-            while(!connected && !cancellationToken.IsCancellationRequested)
+            if (Network.IsConnected)                                                                
             {
-                SendVersion();
-                Thread.Sleep(1000);
+                if (qnh == "" || Airport.ICAOName != ICAO) {                                                            // Only call if no QNH or Aifield changed
+                    MET.ProductRequest myreq = new MET.ProductRequest(MET.ProductType.VATSIM_METAR, ICAO, true);
+                    MET.Instance.RequestProduct(myreq);
+                }
             }
         }
 
-        private void SendVersion()
-        {
-            SendPacket("h" + MIN_VSTRIPS_PLUGIN_VERSION);
-        }
-
-        private void OnConnected()
-        {
-            connected = true;
-            Network.PrimaryFrequencyChanged += Network_PrimaryFrequencyChanged;
-            Network.OnlineATCChanged += Network_OnlineATCChanged;
-            SyncATCLists();
-        }
-
+       
         private void SendControllerInfo()
         {
             if (!Network.IsConnected)
@@ -173,8 +226,14 @@ namespace vStripsPlugin
             SendPacket(trans);
         }
         
-
-
+        /*
+         * Construct the QNH string for the vStrips selected airport and send
+         */
+        private void SendQnh()
+        {
+            if (Instance?.connected == true && qnh != "" && Airport?.ICAOName != null)            
+                Instance?.SendPacket("Q{Airport.ICAOName} Q{qnh}");            
+        }
 
         private void SendATCOnline(NetworkATC atc)
         {
@@ -336,12 +395,9 @@ namespace vStripsPlugin
         }
 
         private void SendRunways()                                                                  // modified JMG to force runways to none and add send QNH
-        {
-            if (connected)
-            { 
-                SendPacket($"R00:00");
-                //SendPacket($"R{Runways}"); //Old                                                              
-            }
+        {                         
+            SendPacket($"R00:00");           
+            //SendPacket($"R{Runways}"); //Old                                                                          
         }
 
         private void ProcessPacket(string packet)
@@ -365,12 +421,14 @@ namespace vStripsPlugin
                         OnConnected();
                     SendControllerInfo();
                     break;
-                case 'r':
-                    if (Airport?.ICAOName != msg || setRunways == false)
+                case 'r':                    
+                    if (Airport?.ICAOName != msg)// || setRunways == false)                            // Commented out as part of  runway supression
                     {
+                        getMetar(msg);                                                                 // call before we update Airport - detects if new
                         Airport = Airspace2.GetAirport(msg);
                         setRunways = false;
                         //vStripsPlugin.ShowSetupWindow();                                             // Commented out to stop popup JMG
+                        
                     }
                     else
                         SendRunways();

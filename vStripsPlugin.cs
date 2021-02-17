@@ -38,23 +38,20 @@ namespace vStripsPlugin
                 Properties.Settings.Default.vStripsHost=IPAddress.Loopback.ToString();
             }
             
-
             vStripsConnector.Start();
-
             setupWindowMenu = new CustomToolStripMenuItem(CustomToolStripMenuItemWindowType.Main, CustomToolStripMenuItemCategory.Settings, new ToolStripMenuItem("vStrips INTAS"));
             setupWindowMenu.Item.Click += SetupWindowMenu_Click;
-            MMI.AddCustomMenuItem(setupWindowMenu);
+            MMI.AddCustomMenuItem(setupWindowMenu);            
             
-            MMI.SelectedTrackChanged += MMI_SelectedTrackChanged;                                           // Subscribe to Selected Track change event JMG
-
+            MMI.SelectedTrackChanged += MMI_SelectedTrackChanged;                                           // Subscribe to Selected Track change event JMG                    
         }
 
         private void SetupWindowMenu_Click(object sender, EventArgs e)
         {
             DoShowSetupWindow();
         }
+
         
-       
         public void OnFDRUpdate(FDP2.FDR updated)
         {
             if (FDP2.GetFDRIndex(updated.Callsign) == -1)//removed
@@ -68,6 +65,8 @@ namespace vStripsPlugin
                 updated.PropertyChanged += FDR_PropertyChanged;                
             }
         }
+        
+
 
         private void FDR_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
@@ -86,6 +85,7 @@ namespace vStripsPlugin
             }            
         }
 
+      
 
         public void OnRadarTrackUpdate(RDP.RadarTrack updated)
         {
