@@ -1,16 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using vatsys;
 using vatsys.Plugin;
-using System.Collections.Concurrent;
 using System.Windows.Forms;
 using System.ComponentModel.Composition;
 using System.Net;
-using System.Net.Sockets;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Text;
 
 namespace vStripsPlugin
 {
@@ -44,6 +37,7 @@ namespace vStripsPlugin
             MMI.AddCustomMenuItem(setupWindowMenu);            
             
             MMI.SelectedTrackChanged += MMI_SelectedTrackChanged;                                           // Subscribe to Selected Track change event JMG                    
+            
         }
 
         private void SetupWindowMenu_Click(object sender, EventArgs e)
@@ -114,10 +108,8 @@ namespace vStripsPlugin
 
         private static void DoShowSetupWindow()
         {
-            if (setupWindow == null || setupWindow.IsDisposed)
-            {
-                setupWindow = new SetupWindow();
-            }
+            if (setupWindow == null || setupWindow.IsDisposed)            
+                setupWindow = new SetupWindow();            
             else if (setupWindow.Visible)
                 return;
 

@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using vatsys;
-using vatsys.Plugin;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
@@ -28,86 +26,86 @@ namespace vStripsPlugin
         private bool connected = false;
         private bool setRunways = false;
         
-
-        private static vStripsConnector Instance;
-        
         public static event EventHandler<PacketReceivedEventArgs> PacketReceived;
         
-        public static IPAddress HostIP = IPAddress.Loopback;
-        
-        private static string runways = DEFAULT_RUNWAYS;
+        public static IPAddress HostIP = IPAddress.Loopback;        
+        public static string runways = DEFAULT_RUNWAYS;
         private static string qnh="";
+        public static Airspace2.Airport Airport = null;
+
+        private static vStripsConnector Instance;
+
+        private vStripsConnector()
+        {
+            vStripsHost = new IPEndPoint(HostIP, VSTRIPS_PORT);
+            vStripsSocket = new UdpClient();
+            cancellationToken = new CancellationTokenSource();
+
+        }
+
         public static string Runways
         {
             get { return runways; }
             set { runways = value; Instance.setRunways = true; Instance.SendRunways(); }
         }
 
-        public static Airspace2.Airport Airport = null;
-
-        private vStripsConnector()
-        {
-            vStripsHost = new IPEndPoint(HostIP, VSTRIPS_PORT);
-            vStripsSocket = new UdpClient();
-            cancellationToken = new CancellationTokenSource();            
-
-        }
-
         private void Network_OnlineATCChanged(object sender, Network.ATCUpdateEventArgs e)
         {
-            if (e.UpdatedATC == null)
-                SyncATCLists();
-            else
+            if (Instance?.connected == true)
             {
-                bool exists = Network.GetOnlineATCs.Contains(e.UpdatedATC);
-                bool sent = vStripsSentATCCallsigns.Contains(e.UpdatedATC.Callsign);
+                if (e.UpdatedATC == null)
+                    SyncATCLists();
+                else
+                {
+                    bool exists = Network.GetOnlineATCs.Contains(e.UpdatedATC);
+                    bool sent = vStripsSentATCCallsigns.Contains(e.UpdatedATC.Callsign);
 
-                if (exists)
-                    SendATCOnline(e.UpdatedATC);
-                else if (!exists && sent)
-                    SendATCOffline(e.UpdatedATC.Callsign);
+                    if (exists)
+                        SendATCOnline(e.UpdatedATC);
+                    else if (!exists && sent)
+                        SendATCOffline(e.UpdatedATC.Callsign);
+                }
             }
         }
 
         private void SyncATCLists()
         {
             var online = Network.GetOnlineATCs;
-
-            foreach (var atc in online.Where(a=>!vStripsSentATCCallsigns.Contains(a.Callsign)))
+            if (Instance?.connected == true)
             {
-                SendATCOnline(atc);
-                vStripsSentATCCallsigns.Add(atc.Callsign);
+                foreach (var atc in online.Where(a => !vStripsSentATCCallsigns.Contains(a.Callsign)))
+                {
+                    SendATCOnline(atc);
+                    vStripsSentATCCallsigns.Add(atc.Callsign);
+                }
+                foreach (var atc in vStripsSentATCCallsigns.Except(online.Select(a => a.Callsign)))
+                    SendATCOffline(atc);
             }
-            foreach (var atc in vStripsSentATCCallsigns.Except(online.Select(a => a.Callsign)))
-                SendATCOffline(atc);
         }
-
-        
 
         private void Network_PrimaryFrequencyChanged(object sender, EventArgs e)
         {
             SendControllerInfo();
         }
 
-
         public static void Restart()
         {
-            Stop();
+            Instance?.Stop();
             Instance = null;
-            Instance = new vStripsConnector();
-            Instance.Connect();
+            Start();
         }
 
         public static void Start()
         {
             Instance = new vStripsConnector();
-            Instance.Connect();            
+            Instance?.Connect();            
         }
 
-        public static void Stop()
+        private void Stop()
         {
             Instance?.Disconnect();
             Instance?.vStripsAssignedHeadings.Clear();
+            Instance?.vStripsSentATCCallsigns.Clear();
         }
 
         private void Connect()
@@ -116,6 +114,15 @@ namespace vStripsPlugin
             Task.Run(() => ReceiveData());
             Task.Run(() => PollForConnection());
         }
+
+        private void Disconnect()
+        {
+            connected = false;
+            cancellationToken.Cancel();
+            vStripsSocket.Close();
+            vStripsSocket.Dispose();            
+        }
+
 
         private void PollForConnection()
         {
@@ -128,17 +135,18 @@ namespace vStripsPlugin
 
         private void SendVersion()
         {
-            SendPacket("h" + MIN_VSTRIPS_PLUGIN_VERSION);
+            SendData("h" + MIN_VSTRIPS_PLUGIN_VERSION);
         }
 
         private void OnConnected()
         {
-            connected = true;
+            
             Network.PrimaryFrequencyChanged += Network_PrimaryFrequencyChanged;
             Network.OnlineATCChanged += Network_OnlineATCChanged;
             MET.Instance.ProductsChanged += MET_ProductChanged;
             SyncATCLists();
-            SendQnh();
+            connected = true;
+            SendQnh();            
         }
 
 
@@ -160,7 +168,7 @@ namespace vStripsPlugin
         public static void SelectStrip(String callsign)
         {
             if (Instance?.connected == true)            
-                Instance.SendPacket(">" + callsign);            
+                Instance.SendData(">" + callsign);            
         }
 
         /*
@@ -207,6 +215,7 @@ namespace vStripsPlugin
                     MET.ProductRequest myreq = new MET.ProductRequest(MET.ProductType.VATSIM_METAR, ICAO, true);
                     MET.Instance.RequestProduct(myreq);
                 }
+                SendQnh();
             }
         }
 
@@ -220,10 +229,10 @@ namespace vStripsPlugin
 
             //CALLSIGN:NAME:FREQ
             string pack = $"U{Network.Me.Callsign}:{Network.Me.RealName}:{ConvertToFreqString(Network.Me.Frequency)}";
-            SendPacket(pack);
+            Instance?.SendData(pack);
 
             string trans = $"T{RDP.TRANSITION_ALTITUDE}";
-            SendPacket(trans);
+            Instance?.SendData(trans);
         }
         
         /*
@@ -232,71 +241,85 @@ namespace vStripsPlugin
         private void SendQnh()
         {
             if (Instance?.connected == true && qnh != "" && Airport?.ICAOName != null)            
-                Instance?.SendPacket("Q{Airport.ICAOName} Q{qnh}");            
+                Instance?.SendData($"Q{Airport.ICAOName} Q{qnh}");            
         }
 
         private void SendATCOnline(NetworkATC atc)
         {
-            SendPacket($"C{atc.Callsign}:{atc.RealName}:{ConvertToFreqString(atc.Frequency)}");
+            if (Instance?.connected==true)
+            {
+                Instance?.SendData($"C{atc.Callsign}:{atc.RealName}:{ConvertToFreqString(atc.Frequency)}");
+            }
         }
 
         private void SendATCOffline(string callsign)
         {
-            SendPacket($"c{callsign}");
+            if (Instance?.connected == true)
+                Instance?.SendData($"c{callsign}");
         }
 
         private void SendDeleteAircraft(FDP2.FDR fdr)
         {
-            SendPacket($"D{fdr.Callsign}");
+            if (Instance?.connected == true)
+                Instance?.SendData($"D{fdr.Callsign}");
         }
 
         private void SendRemarks(FDP2.FDR fdr)
         {
             string rmks = $"P{fdr.Callsign}:{fdr.Remarks}";
-            SendPacket(rmks);
+            if (Instance?.connected == true)
+                Instance?.SendData(rmks);
         }
 
+        private void SendRunways()                                                                  // modified JMG to force runways to none and add send QNH
+        {
+            Instance?.SendData($"R00:00");
+            //SendData($"R{Runways}"); //Old                                                                          
+        }
+
+        /**
+         *  Construct Aircraft data
+         *  
+         *      string[] strArray = msg.Split(':');
+                this.callsign = strArray[0];
+                this.upDown = this.callsign[0];
+                this.callsign = this.callsign.Substring(1);
+                this.origin = strArray[1];
+                this.dest = strArray[2];
+                this.squawk = string.IsNullOrEmpty(strArray[3]) ? (string)null : strArray[3];
+                this.sentSquawk = string.IsNullOrEmpty(strArray[4]) ? (string)null : strArray[4];
+                this.groundState = strArray[5][0];
+                this.altitude = int.Parse(strArray[6]);
+                this.heading = int.Parse(strArray[7]);
+                this.gone = int.Parse(strArray[8]);
+                this.toGo = int.Parse(strArray[9]);
+                this.aircraftType = strArray[10];
+                this.sidName = string.IsNullOrEmpty(strArray[11]) ? (string)null : strArray[11];
+                this.runway = string.IsNullOrEmpty(strArray[12]) ? (string)null : strArray[12];
+                this.fpRules = strArray[13][0] == 'V' ? FltRules.VFR : FltRules.IFR;
+                this.rfl = int.Parse(strArray[14]);
+                this.estDepTime = strArray[15];
+                this.spd = strArray[16];
+                this.groundspeed = int.Parse(strArray[17]);
+                this.route = strArray[18];
+                this.distanceFromMe = int.Parse(strArray[19]);
+                this.commsType = strArray[20][0];
+                try
+                {
+	                this.lat = double.Parse(strArray[21]);
+	                this.lon = double.Parse(strArray[22]);
+                }
+                catch
+                {
+                }
+                if (!(Presenter.CurrentAirfield == "EGLL") && !(Presenter.CurrentAirfield == "EGCC"))
+	                return;
+                this.scratchpad = strArray[23];
+         * 
+         */
 
         private void SendAircraftMetadata(FDP2.FDR fdr)
-        {
-            #region MetaDataPacket
-            //string[] strArray = msg.Split(':');
-            //this.callsign = strArray[0];
-            //this.upDown = this.callsign[0];
-            //this.callsign = this.callsign.Substring(1);
-            //this.origin = strArray[1];
-            //this.dest = strArray[2];
-            //this.squawk = string.IsNullOrEmpty(strArray[3]) ? (string)null : strArray[3];
-            //this.sentSquawk = string.IsNullOrEmpty(strArray[4]) ? (string)null : strArray[4];
-            //this.groundState = strArray[5][0];
-            //this.altitude = int.Parse(strArray[6]);
-            //this.heading = int.Parse(strArray[7]);
-            //this.gone = int.Parse(strArray[8]);
-            //this.toGo = int.Parse(strArray[9]);
-            //this.aircraftType = strArray[10];
-            //this.sidName = string.IsNullOrEmpty(strArray[11]) ? (string)null : strArray[11];
-            //this.runway = string.IsNullOrEmpty(strArray[12]) ? (string)null : strArray[12];
-            //this.fpRules = strArray[13][0] == 'V' ? FltRules.VFR : FltRules.IFR;
-            //this.rfl = int.Parse(strArray[14]);
-            //this.estDepTime = strArray[15];
-            //this.spd = strArray[16];
-            //this.groundspeed = int.Parse(strArray[17]);
-            //this.route = strArray[18];
-            //this.distanceFromMe = int.Parse(strArray[19]);
-            //this.commsType = strArray[20][0];
-            //try
-            //{
-            //    this.lat = double.Parse(strArray[21]);
-            //    this.lon = double.Parse(strArray[22]);
-            //}
-            //catch
-            //{
-            //}
-            //if (!(Presenter.CurrentAirfield == "EGLL") && !(Presenter.CurrentAirfield == "EGCC"))
-            //    return;
-            //this.scratchpad = strArray[23];
-            #endregion
-
+        {            
             if (fdr == null)
                 return;
 
@@ -356,22 +379,16 @@ namespace vStripsPlugin
                 fdr.PredictedPosition.Location.Longitude, 
                 fdr.LabelOpData);
 
-            SendPacket("M" + meta);
+            Instance?.SendData("M" + meta);
             SendRemarks(fdr);
         }
 
-        private void SendPacket(string packet)
+        private void SendData(string packet)
         {
             var data = Encoding.ASCII.GetBytes(packet);
-            vStripsSocket.SendAsync(data, data.Length);
+            Instance?.vStripsSocket.SendAsync(data, data.Length);
         }
-
-        private void Disconnect()
-        {
-            cancellationToken.Cancel();
-            vStripsSocket.Close();
-            vStripsSocket.Dispose();
-        }
+      
 
         private void ReceiveData()
         {
@@ -381,7 +398,7 @@ namespace vStripsPlugin
                 {
                     byte[] data = vStripsSocket.Receive(ref vStripsHost);
                     string packet = Encoding.ASCII.GetString(data);
-                    ProcessPacket(packet);
+                    ProcessData(packet);
                 }
                 catch (SocketException) 
                 {
@@ -394,13 +411,8 @@ namespace vStripsPlugin
             }
         }
 
-        private void SendRunways()                                                                  // modified JMG to force runways to none and add send QNH
-        {                         
-            SendPacket($"R00:00");           
-            //SendPacket($"R{Runways}"); //Old                                                                          
-        }
-
-        private void ProcessPacket(string packet)
+       
+        private void ProcessData(string packet)
         {
             if (packet.Length == 0)
                 return;
@@ -419,33 +431,31 @@ namespace vStripsPlugin
                 case 'U':
                     if (!connected)
                         OnConnected();
-                    SendControllerInfo();
+                        SendControllerInfo();
                     break;
-                case 'r':                    
+                
+                case 'r':                                                                              // Runway request     
                     if (Airport?.ICAOName != msg)// || setRunways == false)                            // Commented out as part of  runway supression
                     {
-                        getMetar(msg);                                                                 // call before we update Airport - detects if new
+                        getMetar(msg);                                                                 // Call before we update 'Airport'
                         Airport = Airspace2.GetAirport(msg);
                         setRunways = false;
-                        //vStripsPlugin.ShowSetupWindow();                                             // Commented out to stop popup JMG
-                        
+                        //vStripsPlugin.ShowSetupWindow();                                             // Commented out to stop popup JMG                        
                     }
                     else
-                        SendRunways();
+                        //SendRunways();
 
                     Airport = Airspace2.GetAirport(msg);
                     break;
-                case 'S':
+                
+                case 'S':                                                                               // State
                     if (msg_fields.Length > 1 && fdr != null)
                     {
                         switch (msg_fields[1])
                         {
                             case "TAXI":
                                 MMI.EstFDR(fdr);
-                                break;
-                            //case "DEPA":
-                            //    FDP2.DepartFDR(fdr, DateTime.UtcNow + TimeSpan.FromSeconds(180));
-                            //    break;
+                                break;                            
                         }
                     }
                     break;
@@ -456,7 +466,7 @@ namespace vStripsPlugin
                  * We need to keep an eye out when Route changes received that have a Dep runway and reassign to Arr runway.
                  * 
                  */
-                case 'R':
+                case 'R':                                                                                   // Route
                     if (msg_fields.Length > 3 && fdr != null)
                     {                                                                        
                         if (fdr.DepAirport == msg_fields[1] && fdr.DesAirport == msg_fields[2])
@@ -496,7 +506,8 @@ namespace vStripsPlugin
                             FDP2.ModifyFDR(fdr, fdr.Callsign, fdr.FlightRules, msg_fields[1], msg_fields[2], msg_fields[3], fdr.Remarks, fdr.AircraftCount.ToString(), fdr.AircraftType, fdr.AircraftWake, fdr.AircraftEquip, fdr.AircraftSurvEquip, fdr.TAS.ToString(), fdr.RFL.ToString(), fdr.ETD.ToString("HHmm"), fdr.EET.ToString("HHmm"));
                         }
                         break;
-                case 'H':
+                
+                case 'H':                                                                                   // Heading
                     if (msg_fields.Length > 1 && fdr != null)
                     {
                         vStripsAssignedHeadings.AddOrUpdate(fdr.Callsign, int.Parse(msg_fields[1]), (s, i) => int.Parse(msg_fields[1]));
@@ -508,7 +519,8 @@ namespace vStripsPlugin
                             FDP2.SetCFL(fdr, FDP2.FDR.LEVEL_NONE, int.Parse(msg_fields[2]), false);
                     }
                     break;
-                case '>':
+                
+                case '>':                                                                               // Select Callsign
                     // Edited JMG to ensure when strip is selected in vStrips, track is selected in vatSys
                     if(fdr != null)
                     {
