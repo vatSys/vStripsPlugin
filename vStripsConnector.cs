@@ -18,20 +18,20 @@ namespace vStripsPlugin
         private IPEndPoint vStripsHost;
         private UdpClient vStripsSocket;
         private const int VSTRIPS_PORT = 60301;
-        private const string MIN_VSTRIPS_PLUGIN_VERSION = "1.18";
+        private const string MIN_VSTRIPS_PLUGIN_VERSION = "1.26";
         private CancellationTokenSource cancellationToken;
-        
+
+
+        private ConcurrentDictionary<string, (string runway, string sid)> sidSuggestions = new ConcurrentDictionary<string, (string, string)>();//key FDR callsign, value (runway, sid)
         private ConcurrentDictionary<string, int> vStripsAssignedHeadings = new ConcurrentDictionary<string, int>();
         private List<string> vStripsSentATCCallsigns = new List<string>();
         private bool connected = false;
         private bool setRunways = false;
-        
-        public static event EventHandler<PacketReceivedEventArgs> PacketReceived;
-        
-        public static IPAddress HostIP = IPAddress.Loopback;        
-        public static string runways = DEFAULT_RUNWAYS;
-        private static string qnh="";
-        public static Airspace2.Airport Airport = null;
+
+        private string depRunways = "00";
+        private string arrRunways = "00";
+        private string qnh="";
+
 
         private static vStripsConnector Instance;
 
@@ -43,11 +43,13 @@ namespace vStripsPlugin
 
         }
 
-        public static string Runways
-        {
-            get { return runways; }
-            set { runways = value; Instance.setRunways = true; Instance.SendRunways(); }
-        }
+        public static event EventHandler<PacketReceivedEventArgs> PacketReceived;
+
+        public static IPAddress HostIP { get; set; } = IPAddress.Loopback;
+
+        public static Airspace2.Airport Airport { get; set; }
+
+        public static string Runways => Instance.arrRunways + ":" + Instance.depRunways;
 
         private void Network_OnlineATCChanged(object sender, Network.ATCUpdateEventArgs e)
         {
@@ -101,11 +103,21 @@ namespace vStripsPlugin
             Instance?.Connect();            
         }
 
+        public static void SetRunways(string dep, string arr)
+        {
+            Instance.depRunways = dep;
+            Instance.arrRunways = arr;
+            Instance.setRunways = true;
+            Instance.SendRunways();
+            Instance.sidSuggestions.Clear();
+        }
+
         private void Stop()
         {
             Instance?.Disconnect();
             Instance?.vStripsAssignedHeadings.Clear();
             Instance?.vStripsSentATCCallsigns.Clear();
+            Instance?.sidSuggestions.Clear();
         }
 
         private void Connect()
@@ -162,6 +174,7 @@ namespace vStripsPlugin
             {
                 Instance.SendDeleteAircraft(fdr);
                 Instance.vStripsAssignedHeadings.TryRemove(fdr.Callsign, out _);
+                Instance.sidSuggestions.TryRemove(fdr.Callsign, out _);
             }
         }
 
@@ -228,7 +241,24 @@ namespace vStripsPlugin
             SendVersion();
 
             //CALLSIGN:NAME:FREQ
-            string pack = $"U{Network.Me.Callsign}:{Network.Me.RealName}:{ConvertToFreqString(Network.Me.Frequency)}";
+            //Australia workaround (2 char airport name as callsign)
+            string callsign = Network.Me.Callsign;
+            if(callsign.Length > 3 && callsign[2] == '_')
+            {
+                string suffix = callsign.Substring(2);
+                string twoChar = callsign.Substring(0, 2);
+                string[] australiaRegions = new string[] { "YB", "YM", "YS", "YP" };
+                foreach(var region in australiaRegions)
+                {
+                    var airport = Airspace2.GetAirport(region + twoChar);
+                    if(airport != null)
+                    {
+                        callsign = region + twoChar + suffix;
+                        break;
+                    }
+                }
+            }
+            string pack = $"U{callsign}:{Network.Me.RealName}:{ConvertToFreqString(Network.Me.Frequency)}";
             Instance?.SendData(pack);
 
             string trans = $"T{RDP.TRANSITION_ALTITUDE}";
@@ -273,8 +303,8 @@ namespace vStripsPlugin
 
         private void SendRunways()                                                                  // modified JMG to force runways to none and add send QNH
         {
-            Instance?.SendData($"R00:00");
-            //SendData($"R{Runways}"); //Old                                                                          
+            //Instance?.SendData($"R00:00");
+            SendData($"R{Runways}"); //Old                                                                          
         }
 
         /**
@@ -353,6 +383,23 @@ namespace vStripsPlugin
             int ahdg = 0;
             vStripsAssignedHeadings.TryGetValue(fdr.Callsign, out ahdg);
 
+            string drwy = fdr.DepartureRunway?.Name ?? "";
+            string sid = fdr.SID?.Name ?? "";
+            if (string.IsNullOrEmpty(drwy) && fdr.ATD == DateTime.MaxValue)
+            {
+                (string runway, string sid) suggested;
+
+                if (!sidSuggestions.TryGetValue(fdr.Callsign, out suggested))
+                {
+                    suggested = SuggestSID(fdr);
+                    if(suggested.sid != null)
+                        sidSuggestions.TryAdd(fdr.Callsign, suggested);
+                }
+
+                drwy = suggested.runway;
+                sid = suggested.sid;
+            }
+
             string meta = string.Join(":", 
                 upDown + fdr.Callsign, 
                 fdr.DepAirport, 
@@ -365,8 +412,9 @@ namespace vStripsPlugin
                 gone,
                 togo,
                 fdr.AircraftType + "/" + fdr.AircraftWake,
-                (fdr.DepAirport == Airport?.ICAOName ? fdr.SIDSTARString:""),                       //  modified JMG - Inhibit STAR population for airborne
-                fdr.RunwayString, 
+                (fdr.DepAirport == Airport?.ICAOName ? sid:""),                       //  modified JMG - Inhibit STAR population for airborne
+                drwy,
+                fdr.ArrivalRunway?.Name,
                 fdr.FlightRules, 
                 fdr.RFL, 
                 fdr.ETD.ToString("HHmm"), 
@@ -377,10 +425,116 @@ namespace vStripsPlugin
                 fdr.TextOnly ? "T" : fdr.ReceiveOnly ? "R" : "V", 
                 fdr.PredictedPosition.Location.Latitude, 
                 fdr.PredictedPosition.Location.Longitude, 
+                "",//stand
                 fdr.LabelOpData);
 
             Instance?.SendData("M" + meta);
             SendRemarks(fdr);
+        }
+
+        private (string runway, string sid) SuggestSID(FDP2.FDR fdr)
+        {
+            if (string.IsNullOrEmpty(depRunways) || depRunways == "00" || Airport == null || fdr.DepAirport != Airport.ICAOName)
+                return ("","");
+
+            foreach (var srwy in depRunways.Split(','))
+            {
+                Airspace2.SystemRunway runway = Airspace2.GetRunway(Airport.ICAOName, srwy);
+                if (runway != null)
+                {
+                    ConcurrentDictionary<Airspace2.SystemRunway.SIDSTARKey, int> indicies = new ConcurrentDictionary<Airspace2.SystemRunway.SIDSTARKey, int>();
+                    List<FDP2.FDR.ExtractedRoute.Segment> waypoints = fdr.ParsedRoute.Where(s => s.Type == FDP2.FDR.ExtractedRoute.Segment.SegmentTypes.WAYPOINT).ToList();
+
+                    Parallel.ForEach(runway.SIDs, key =>
+                    {
+                        Airspace2.SIDSTAR sid = key.sidStar;
+                        if (key.typeRestriction != Airspace2.SystemRunway.AircraftType.All)
+                        {
+                            if (fdr.AircraftTypeAndWake != null && fdr.PerformanceData != null)
+                            {
+                                if (key.typeRestriction == Airspace2.SystemRunway.AircraftType.NonJet && fdr.PerformanceData.IsJet
+                                    || key.typeRestriction == Airspace2.SystemRunway.AircraftType.Jet && !fdr.PerformanceData.IsJet)
+                                    return;
+                            }
+                        }
+
+                        int index = -1;
+                        if (sid.Route.Count > 0)
+                        {
+                            for (int i = 0; i < waypoints.Count; i++)
+                            {
+                                if (sid.Route[sid.Route.Count - 1].Name == waypoints[i].Intersection.Name)
+                                {
+                                    index = i;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (index == -1 && sid.RunwaySpecificRoute.ContainsKey(runway.Runway.Name) && sid.RunwaySpecificRoute[runway.Runway.Name].Count > 0)
+                        {
+                            for (int i = 0; i < waypoints.Count; i++)
+                            {
+                                if (sid.RunwaySpecificRoute[runway.Runway.Name][sid.RunwaySpecificRoute[runway.Runway.Name].Count - 1].Name == waypoints[i].Intersection.Name)
+                                {
+                                    index = i;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (index == -1 && sid.Transitions.Count > 0)
+                        {
+                            foreach (string t in sid.Transitions.Keys)
+                            {
+                                for (int i = 0; i < waypoints.Count; i++)
+                                {
+                                    if (t == waypoints[i].Intersection.Name)
+                                    {
+                                        index = i;
+                                        break;
+                                    }
+                                }
+
+                                if (index != -1)
+                                    break;
+                            }
+                        }
+
+                        if (index != -1)
+                            indicies.TryAdd(key, index);
+                    });
+
+                    int lastIndex = -1;
+                    Airspace2.SIDSTAR lastSid = null;
+
+                    if (waypoints.Count > 0)
+                    {
+                        if (indicies.Count > 0)
+                        {
+                            List<KeyValuePair<Airspace2.SystemRunway.SIDSTARKey, int>> orderedIndicies = indicies.OrderByDescending(k => k.Key.opDataFlag).ThenBy(k => k.Value).ToList();
+                            lastIndex = orderedIndicies.First().Value;
+                            lastSid = orderedIndicies.First().Key.sidStar;
+                        }
+                        else if (runway.SIDs.Exists(s => s.Default))
+                        {
+                            Airspace2.SystemRunway.SIDSTARKey defKey = runway.SIDs.First(s => s.Default);
+                            if (waypoints.Count == 1)
+                                lastIndex = 0;
+                            else
+                                lastIndex = 1;
+                            lastSid = defKey.sidStar;
+                        }
+                    }
+
+                    if (lastIndex != -1 && lastSid != null)
+                    {
+                        return (srwy,lastSid.Name);
+                    }
+                }
+            }
+
+            return ("", "");
         }
 
         private void SendData(string packet)
@@ -443,7 +597,7 @@ namespace vStripsPlugin
                         //vStripsPlugin.ShowSetupWindow();                                             // Commented out to stop popup JMG                        
                     }
                     else
-                        //SendRunways();
+                        SendRunways();
 
                     Airport = Airspace2.GetAirport(msg);
                     break;
@@ -453,13 +607,32 @@ namespace vStripsPlugin
                     {
                         switch (msg_fields[1])
                         {
-                            case "TAXI":
-                                MMI.EstFDR(fdr);
-                                break;                            
+                            default:
+                                break;
                         }
                     }
                     break;
-                
+                case 'G'://TAXI message moved to 'G', Ground state?
+                    if (msg_fields.Length > 1 && fdr != null)
+                    {
+                        switch (msg_fields[1])
+                        {
+                            case "CLEA":
+                                (string runway, string sid) suggestedSid;
+                                if(Airport != null && fdr.DepartureRunway == null && sidSuggestions.TryGetValue(fdr.Callsign, out suggestedSid))
+                                {
+                                    var srwy = Airspace2.GetRunway(Airport.ICAOName, suggestedSid.runway);
+                                    if (srwy != null)
+                                        FDP2.SetDepartureRunway(fdr, srwy);
+                                }
+                                break;
+                            case "TAXI":
+                                MMI.EstFDR(fdr);
+                                break;
+                        }
+                    }
+                    break;
+
                 /*
                  * JMG 
                  * vStrips doesn't send Arrival Runway, so we use Dep runway in vStrips for Arrival runway allocation. 
@@ -471,31 +644,28 @@ namespace vStripsPlugin
                     {                                                                        
                         if (fdr.DepAirport == msg_fields[1] && fdr.DesAirport == msg_fields[2])
                         {
-
                             string rte = msg_fields[3];
-                            string[] rte_fields = rte.Split(' ');                                           // parse route on space                            
-                            
+                            string[] rte_fields = rte.Split(' ');                                                               
 
-                            if (rte_fields[0].Contains('/') )                                               // If the first field has a slash,  it's a Dep runway assignment.
+                            if (rte_fields[0].Contains('/') )                                               
                             {
                                 string[] start_fields = rte_fields[0].Split('/');                                                           
-                                String NewRwy = start_fields[1];                                            // get the runway
+                                string NewRwy = start_fields[1];                                      
 
-                                if (fdr.CoupledTrack?.OnGround == false)                                    // if we're airborne apply the runway to Arrivals
+                                if (fdr.ATD != DateTime.MaxValue)                                   
                                 {
-                                    FDP2.SetArrivalRunway(fdr, Airspace2.GetRunway(fdr.DesAirport, NewRwy));
+                                    var srwy = Airspace2.GetRunway(fdr.DesAirport, NewRwy);
+                                    if(srwy != null && fdr.ArrivalRunway != srwy)
+                                        FDP2.SetArrivalRunway(fdr, srwy);
                                 }
-                                else                                                                        // Apply the Route change, or Dep runway change
+                                else                                                                    
                                 {
-                                    string temprwy = "";
-                                    if (fdr.DepartureRunway != null)
-                                        temprwy = fdr.DepartureRunway.ToString();
-
-                                    if (temprwy != NewRwy)                                                  // if the Dep runway has changed
+                                    var srwy = Airspace2.GetRunway(fdr.DepAirport, NewRwy);
+                                    if (srwy != null && srwy != fdr.ArrivalRunway)                                                 
                                     {
-                                        FDP2.SetDepartureRunway(fdr, Airspace2.GetRunway(fdr.DepAirport, NewRwy));
+                                        FDP2.SetDepartureRunway(fdr, srwy);
                                     }
-                                    else                                                                    // Not a runway change, so update the route
+                                    else                                                                   
                                     {
                                         FDP2.ModifyRoute(fdr, rte);
                                     }

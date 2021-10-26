@@ -40,7 +40,7 @@ namespace vStripsPlugin
 
         private void button2_Click(object sender, EventArgs e)
         {
-            vStripsConnector.Runways = textBox1.Text + ":" + textBox2.Text;
+            //vStripsConnector.Runways = textBox1.Text + ":" + textBox2.Text;
         }
     }
 }

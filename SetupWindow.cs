@@ -20,9 +20,9 @@ namespace vStripsPlugin
         {
             InitializeComponent();
 
-            arrivalView.BackColor = Colours.GetColour(Colours.Identities.WindowBackgound);
+            arrivalView.BackColor = Colours.GetColour(Colours.Identities.WindowBackground);
             arrivalView.ForeColor = Colours.GetColour(Colours.Identities.InteractiveText);
-            departureView.BackColor = Colours.GetColour(Colours.Identities.WindowBackgound);
+            departureView.BackColor = Colours.GetColour(Colours.Identities.WindowBackground);
             departureView.ForeColor = Colours.GetColour(Colours.Identities.InteractiveText);
 
             // Retrieve Properties Information
@@ -38,8 +38,8 @@ namespace vStripsPlugin
                 if(rwys != null)
                 {
                     string[] split = vStripsConnector.Runways.Split(':');
-                    string[] arwys = split[0].Split('/');
-                    string[] drwys = split[1].Split('/');
+                    string[] arwys = split[0].Split(',');
+                    string[] drwys = split[1].Split(',');
 
                     foreach (var rwy in rwys.Select(r => r.Name).OrderBy(n => n))
                     {
@@ -111,7 +111,7 @@ namespace vStripsPlugin
                     drwys.Add(node.Text);
             }
 
-            vStripsConnector.Runways = string.Join(":", string.Join("/", arwys), string.Join("/", drwys));
+            vStripsConnector.SetRunways(string.Join(",", drwys),string.Join(",", arwys));
 
             closeDialog = true;
             this.Close();
@@ -129,9 +129,6 @@ namespace vStripsPlugin
 
         private void SetupWindow_FormClosing(object sender, FormClosingEventArgs e)
         {
-            if (e.CloseReason == CloseReason.UserClosing && !closeDialog)
-                vStripsConnector.Runways = vStripsConnector.Runways;//resets
-
             this.Dispose();
         }
 

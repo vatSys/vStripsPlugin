@@ -17,7 +17,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>..\..\..\Documents\vatSys Files\Profiles\Australia\Plugins\</OutputPath>
+    <OutputPath>..\..\..\..\..\Program Files %28x86%29\vatSys\bin\Plugins\vStripsPlugin\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
