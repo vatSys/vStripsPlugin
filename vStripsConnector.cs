@@ -228,7 +228,7 @@ namespace vStripsPlugin
             SendVersion();
 
             //CALLSIGN:NAME:FREQ
-            string pack = $"U{Network.Me.Callsign}:{Network.Me.RealName}:{ConvertToFreqString(Network.Me.Frequency)}";
+            string pack = $"U{Network.Me.Callsign}:{Network.Me.RealName}:{ConvertFreqArrayToString(Network.Me.Frequencies)}";
             Instance?.SendData(pack);
 
             string trans = $"T{RDP.TRANSITION_ALTITUDE}";
@@ -247,8 +247,8 @@ namespace vStripsPlugin
         private void SendATCOnline(NetworkATC atc)
         {
             if (Instance?.connected==true)
-            {
-                Instance?.SendData($"C{atc.Callsign}:{atc.RealName}:{ConvertToFreqString(atc.Frequency)}");
+            {               
+                Instance?.SendData($"C{atc.Callsign}:{atc.RealName}:{(ConvertFreqArrayToString(atc.Frequencies))}");
             }
         }
 
@@ -540,6 +540,12 @@ namespace vStripsPlugin
             PacketReceived?.Invoke(this, new PacketReceivedEventArgs(packet));
             Console.WriteLine(packet);
         }
+
+        private static string ConvertFreqArrayToString(int[] vatsysFreqArray)
+        {
+            return vatsysFreqArray[0].ToString().Substring(0, 5);
+        }
+
 
         private static string ConvertToFreqString(uint vatsysFreq)
         {

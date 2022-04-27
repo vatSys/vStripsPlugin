@@ -20,9 +20,9 @@ namespace vStripsPlugin
         {
             InitializeComponent();
 
-            arrivalView.BackColor = Colours.GetColour(Colours.Identities.WindowBackgound);
+            arrivalView.BackColor = Colours.GetColour(Colours.Identities.WindowBackground);
             arrivalView.ForeColor = Colours.GetColour(Colours.Identities.InteractiveText);
-            departureView.BackColor = Colours.GetColour(Colours.Identities.WindowBackgound);
+            departureView.BackColor = Colours.GetColour(Colours.Identities.WindowBackground);
             departureView.ForeColor = Colours.GetColour(Colours.Identities.InteractiveText);
 
             // Retrieve Properties Information
